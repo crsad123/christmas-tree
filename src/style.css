@@ -75,6 +75,12 @@ h1 {
   bottom: auto;
 }
 
+#photos {
+  top: 22px;
+  right: clamp(18px, 3vw, 44px);
+  bottom: auto;
+}
+
 button {
   position: fixed;
   right: clamp(18px, 3vw, 44px);

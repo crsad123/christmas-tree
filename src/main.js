@@ -296,20 +296,22 @@ function toGeo(buf) {
 }
 
 // 没被写成字母的粒子，张开手时散成满天星
+// 张开手时收成一颗彩球
 function putStar(buf, i) {
-  const ang = Math.random() * Math.PI * 2;
-  const rad = 7.2 + Math.random() * 11;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const theta = Math.random() * Math.PI * 2;
+  const rad = 3.15 + Math.random() * 1.7;
   const o = i * 3;
-  buf.alt[o] = Math.cos(ang) * rad;
-  buf.alt[o + 1] = -1.4 + Math.random() * 12.5;
-  buf.alt[o + 2] = Math.sin(ang) * rad * (0.6 + Math.random() * 0.7);
-  const warm = Math.random() < 0.18;
-  const col = new THREE.Color(warm ? 0xf2d7a6 : 0xf4f7fb);
-  const gain = warm ? 1.7 : 1.05;
+  buf.alt[o] = Math.sin(phi) * Math.cos(theta) * rad;
+  buf.alt[o + 1] = Math.cos(phi) * rad * 0.9 + 2.75;
+  buf.alt[o + 2] = Math.sin(phi) * Math.sin(theta) * rad;
+  const palette = [0xff4d6a, 0xffc14d, 0x3dce7a, 0x4aa3ff, 0xff6b9a, 0xfff1c9, 0xb388ff];
+  const col = new THREE.Color(palette[i % palette.length]);
+  const gain = 1.45;
   buf.altColor[o] = col.r * gain;
   buf.altColor[o + 1] = col.g * gain;
   buf.altColor[o + 2] = col.b * gain;
-  buf.altScale[i] = 0.16 + Math.random() * (warm ? 0.7 : 0.42);
+  buf.altScale[i] = 0.2 + Math.random() * 0.38;
   buf.altKind[i] = 0;
 }
 
@@ -320,8 +322,8 @@ function fillStars(buf) {
 
 const foliageN = 20000;
 const foliage = alloc(foliageN);
-const iceIn = [0xb7c9db, 0xc9d8e8, 0xd5e2ef];
-const iceOut = [0xeef4fb, 0xf7fbff, 0xffffff];
+const iceIn = [0x7a1830, 0x0d5a34, 0x163a78, 0x6a320c];
+const iceOut = [0xff3358, 0x35d67a, 0x3d8dff, 0xffc14d, 0xff5fa2, 0xfff0c2];
 
 for (let i = 0; i < foliageN; i++) {
   const p = branchSample();
@@ -331,7 +333,7 @@ for (let i = 0; i < foliageN; i++) {
     color = iceOut[i % 3];
     scale = 0.32 + Math.random() * 0.4;
   }
-  if (Math.random() < 0.045) color = 0xf4e4c0;
+  if (Math.random() < 0.12) color = iceOut[(i + 2) % iceOut.length];
   pushPoint(foliage, i, p, color, scale, 0);
   const o = i * 3;
   const gain = p.radial > 0.75 ? 1.85 : 1.45;
@@ -342,7 +344,7 @@ for (let i = 0; i < foliageN; i++) {
 
 const lightN = 520;
 const lights = alloc(lightN);
-const bulbs = [0xfff8ee, 0xf0d59a, 0xd7ebff, 0xffffff];
+const bulbs = [0xff2d4a, 0xffc14d, 0x3dce7a, 0x4aa3ff, 0xff6b9a, 0xfff1c9];
 for (let i = 0; i < lightN; i++) {
   let p = branchSample();
   let guard = 0;
@@ -358,7 +360,7 @@ for (let i = 0; i < lightN; i++) {
   lights.color[o + 2] *= 2.15;
 }
 
-// 三股银丝绕着锥面走，kind 0.25 用来转得更快
+// 三股彩带绕着锥面走，kind 0.25 用来转得更快
 const ribbonCount = 3;
 const perRibbon = 1700;
 const tinselN = ribbonCount * perRibbon;
@@ -376,7 +378,8 @@ for (let r = 0; r < ribbonCount; r++) {
       t,
     };
     const idx = r * perRibbon + i;
-    const color = r === 1 ? 0xfff6e2 : 0xf4f8ff;
+    const ribbonCol = [0xffd56a, 0xff5d8a, 0x7ec8ff];
+    const color = ribbonCol[r % ribbonCol.length];
     pushPoint(tinsel, idx, p, color, 0.28 + Math.random() * 0.22, 0.25);
     const o = idx * 3;
     tinsel.color[o] *= 2.35;
@@ -477,7 +480,7 @@ async function stampWords() {
   touchPts(tinselPts);
   console.log("文字采样", pairs, "用了", budget, "字号", size);
 }
-stampWords();
+// 这支上张开手是彩球，不再印那句字
 
 function makeStarShape() {
   const shape = new THREE.Shape();
@@ -579,7 +582,6 @@ const starGlow = new THREE.Sprite(
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    depthTest: false,
     opacity: 0.95,
   })
 );
@@ -595,7 +597,6 @@ const starHalo = new THREE.Sprite(
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    depthTest: false,
     opacity: 0.42,
   })
 );
@@ -603,6 +604,140 @@ starHalo.position.y = 6.58;
 starHalo.scale.set(0.85, 0.85, 1);
 starHalo.renderOrder = 3;
 tree.add(starHalo);
+
+// 礼物和照片在树里、在球里都绕着转
+const cluster = new THREE.Group();
+scene.add(cluster);
+const orbits = [];
+const orbitHome = new THREE.Vector3();
+const orbitDest = new THREE.Vector3();
+const orbitScale = new THREE.Vector3();
+let held = null;
+let pinchNdc = null;
+
+function orbitItem(obj, kind) {
+  obj.userData.kind = kind;
+  obj.userData.ang = Math.random() * Math.PI * 2;
+  obj.userData.spin = 0.45 + Math.random() * 0.85;
+  obj.userData.rad = 1.05 + Math.random() * 1.45;
+  obj.userData.y0 = 1.15 + Math.random() * 4.15;
+  obj.userData.phase = Math.random() * 6.28;
+  obj.userData.home = obj.scale.x || 1;
+  cluster.add(obj);
+  orbits.push(obj);
+}
+
+function makeGift(wrap, ribbon) {
+  const g = new THREE.Group();
+  const boxMat = new THREE.MeshStandardMaterial({ color: wrap, roughness: 0.45, metalness: 0.08 });
+  const ribMat = new THREE.MeshStandardMaterial({
+    color: ribbon,
+    roughness: 0.3,
+    metalness: 0.22,
+    emissive: ribbon,
+    emissiveIntensity: 0.18,
+  });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.36, 0.42), boxMat);
+  const bandV = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.38, 0.44), ribMat);
+  const bandH = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.09, 0.12), ribMat);
+  g.add(box, bandV, bandH);
+  g.scale.setScalar(0.72);
+  return g;
+}
+
+function paintCard(hue, label) {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 640;
+  const g = c.getContext("2d");
+  g.fillStyle = "#f6f0e6";
+  g.fillRect(0, 0, 512, 640);
+  const grd = g.createLinearGradient(36, 36, 476, 476);
+  grd.addColorStop(0, "hsl(" + hue + " 70% 58%)");
+  grd.addColorStop(1, "hsl(" + ((hue + 36) % 360) + " 65% 42%)");
+  g.fillStyle = grd;
+  g.fillRect(36, 36, 440, 440);
+  g.fillStyle = "rgba(255,248,236,0.92)";
+  g.beginPath();
+  g.arc(256, 230, 78, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#3a2a22";
+  g.font = "28px Georgia";
+  g.textAlign = "center";
+  g.fillText(label, 256, 560);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function makePhoto(tex) {
+  const g = new THREE.Group();
+  const paper = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.78, 0.98),
+    new THREE.MeshStandardMaterial({
+      color: 0xf7f1e6,
+      roughness: 0.7,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    })
+  );
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.66, 0.66),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+  );
+  face.position.set(0, 0.08, 0.02);
+  g.add(paper, face);
+  g.scale.setScalar(0.9);
+  return g;
+}
+
+const giftColors = [
+  [0xc81d32, 0xf2d48a],
+  [0x1d6b45, 0xf0c14d],
+  [0xc6a15a, 0x8e1a28],
+  [0xf3ead7, 0xb42334],
+  [0x16386a, 0xffe1a8],
+  [0xff6b93, 0xfff6e4],
+];
+for (let i = 0; i < giftColors.length; i++) {
+  orbitItem(makeGift(giftColors[i][0], giftColors[i][1]), "gift");
+}
+const starters = [
+  [12, "night"],
+  [42, "warm"],
+  [200, "pine"],
+  [330, "rose"],
+];
+for (let i = 0; i < starters.length; i++) {
+  orbitItem(makePhoto(paintCard(starters[i][0], starters[i][1])), "photo");
+}
+
+function photosOnly() {
+  const list = [];
+  for (let i = 0; i < orbits.length; i++) {
+    if (orbits[i].userData.kind === "photo") list.push(orbits[i]);
+  }
+  return list;
+}
+
+const photoBtn = document.querySelector("#photos");
+const photoFile = document.querySelector("#photo-file");
+photoBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  photoFile.click();
+});
+photoFile.addEventListener("change", () => {
+  const files = photoFile.files;
+  if (!files || !files.length) return;
+  for (let i = 0; i < files.length; i++) {
+    const url = URL.createObjectURL(files[i]);
+    const tex = new THREE.TextureLoader().load(url);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    orbitItem(makePhoto(tex), "photo");
+  }
+  console.log("放进树里", files.length, "张");
+  photoFile.value = "";
+});
 
 const snowTex = circleTex();
 const snowMat = new THREE.PointsMaterial({
@@ -986,18 +1121,41 @@ function readHand() {
   }
   const top = res.gestures && res.gestures[0] && res.gestures[0][0];
   const lm = (res.worldLandmarks && res.worldLandmarks[0]) || (res.landmarks && res.landmarks[0]);
-  let want = null;
-  if (top && top.categoryName && top.categoryName !== "None" && top.score > 0.4) {
-    if (top.categoryName === "Open_Palm" || top.categoryName === "Victory" || top.categoryName === "ILoveYou") want = true;
-    else if (top.categoryName === "Closed_Fist") want = false;
+  const img = res.landmarks && res.landmarks[0];
+  if (!img || img.length < 21) return;
+
+  // 拇指食指、食指小拇指：要捏的时候把照片拿出来，捏紧就收回去
+  const ti = Math.hypot(img[4].x - img[8].x, img[4].y - img[8].y);
+  const ip = Math.hypot(img[8].x - img[20].x, img[8].y - img[20].y);
+  const approach = (ti > 0.05 && ti < 0.15) || (ip > 0.055 && ip < 0.17);
+  const together = ti < 0.042 || ip < 0.046;
+  pinchNdc = { x: img[8].x, y: img[8].y };
+
+  if (approach && !together) {
+    if (!held) {
+      const photos = photosOnly();
+      if (photos.length) {
+        const i = Math.min(photos.length - 1, Math.floor(img[8].x * photos.length));
+        held = photos[i];
+        console.log("捏出照片", i);
+      }
+    }
+    return;
   }
-  if (lm && lm.length >= 21) {
-    const n = openFingers(lm);
-    if (n >= 3) want = true;
-    else if (n <= 1) want = false;
+  if (held && together) {
+    held = null;
+    console.log("照片回去");
   }
-  if (want === true) noteHand(true);
-  else if (want === false) noteHand(false);
+
+  const n = lm && lm.length >= 21 ? openFingers(lm) : 0;
+  const fist = (top && top.categoryName === "Closed_Fist" && top.score > 0.4) || n <= 1;
+  const palm =
+    (top &&
+      (top.categoryName === "Open_Palm" || top.categoryName === "Victory" || top.categoryName === "ILoveYou") &&
+      top.score > 0.4) ||
+    n >= 3;
+  if (fist && n <= 1) noteHand(false);
+  else if (palm) noteHand(true);
 }
 
 async function makeGesture(vision, delegate) {
@@ -1088,20 +1246,43 @@ function frameBody(now) {
   scene.fog.density = 0.011 * (1 - openAmt * 0.45);
   bloom.intensity = 1.05 - openAmt * 0.9;
 
-  if (intro >= 1 && openAmt > 0.04 && !pressing) {
-    framingWords = true;
-    controls.autoRotate = false;
-    const k = 1 - Math.exp(-dt * 2.2);
-    camera.position.lerp(camFront, k);
-    controls.target.lerp(wordTarget, k);
-  } else if (intro >= 1 && framingWords && openTarget < 0.5 && !pressing) {
-    const k = 1 - Math.exp(-dt * 1.8);
-    camera.position.lerp(camHome, k);
-    controls.target.lerp(treeLook, k);
-    controls.autoRotate = !reduceMotion;
-    if (camera.position.distanceTo(camHome) < 0.06) framingWords = false;
-  } else if (intro >= 1 && !reduceMotion && openTarget < 0.5 && !pressing) {
+  if (intro >= 1 && !reduceMotion && !pressing && !held) {
     controls.autoRotate = true;
+  }
+
+  const ball = openAmt;
+  for (let i = 0; i < orbits.length; i++) {
+    const obj = orbits[i];
+    obj.userData.ang += dt * obj.userData.spin * (0.75 + ball * 0.7);
+    const ang = obj.userData.ang;
+    let rad = obj.userData.rad;
+    let y = obj.userData.y0;
+    if (ball > 0.02) {
+      const sph = 4.4 + Math.sin(obj.userData.phase) * 0.55;
+      rad = rad + (sph - rad) * ball;
+      const yBall = 2.7 + Math.sin(ang * 1.7 + obj.userData.phase) * 2.8;
+      y = y + (yBall - y) * ball;
+    }
+    orbitHome.set(Math.cos(ang) * rad, y, Math.sin(ang) * rad);
+    if (obj === held) {
+      camera.getWorldDirection(orbitDest);
+      orbitDest.multiplyScalar(5.2).add(camera.position);
+      if (pinchNdc) {
+        orbitDest.x += (pinchNdc.x - 0.5) * 2.2;
+        orbitDest.y += (0.5 - pinchNdc.y) * 1.4;
+      }
+      obj.position.lerp(orbitDest, 1 - Math.exp(-dt * 7));
+      obj.lookAt(camera.position);
+      orbitScale.set(2.7, 2.7, 2.7);
+      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 7));
+    } else {
+      obj.position.lerp(orbitHome, 1 - Math.exp(-dt * 4.5));
+      obj.rotation.y = ang + time * 0.55;
+      obj.rotation.z = Math.sin(time * 0.7 + obj.userData.phase) * 0.18;
+      const s = obj.userData.home;
+      orbitScale.set(s, s, s);
+      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 5));
+    }
   }
 
   const born = reduceMotion ? 1 : Math.min(1, Math.max(0, (assemble - 0.72) / 0.22));
