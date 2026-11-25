@@ -85,11 +85,7 @@ void main() {
     gl_PointSize = clamp(scaleNow * (0.9 + blink * 0.2) * (255.0 / max(1.0, -mv.z)), 1.7, 28.0);
   }
   vColor = colNow * blink * uGain;
-  vAlpha = shown > 1.5 ? 1.0 : 0.9;
-  float isLetter = step(1.5, shown);
-  float field = smoothstep(0.3, 0.85, uOpen) * (1.0 - isLetter);
-  vColor *= mix(1.0, 0.2, field);
-  gl_PointSize *= mix(1.0, 0.5, field);
+  vAlpha = shown > 1.5 ? 1.0 : 0.92;
   vKind = shown;
 }
 `;
@@ -295,24 +291,23 @@ function toGeo(buf) {
   return geo;
 }
 
-// 没被写成字母的粒子，张开手时散成满天星
-// 张开手时收成一颗彩球
+// 张掌以后铺开的满天星，不是一小团球
 function putStar(buf, i) {
   const phi = Math.acos(2 * Math.random() - 1);
   const theta = Math.random() * Math.PI * 2;
-  const rad = 3.15 + Math.random() * 1.7;
+  const rad = 3.4 + Math.pow(Math.random(), 0.62) * 6.4;
   const o = i * 3;
   buf.alt[o] = Math.sin(phi) * Math.cos(theta) * rad;
-  buf.alt[o + 1] = Math.cos(phi) * rad * 0.9 + 2.75;
-  buf.alt[o + 2] = Math.sin(phi) * Math.sin(theta) * rad;
+  buf.alt[o + 1] = 2.2 + Math.random() * 6.6;
+  buf.alt[o + 2] = Math.sin(phi) * Math.sin(theta) * rad * 0.72;
   const palette = [0xff4d6a, 0xffc14d, 0x3dce7a, 0x4aa3ff, 0xff6b9a, 0xfff1c9, 0xb388ff];
   const col = new THREE.Color(palette[i % palette.length]);
   const gain = 1.45;
   buf.altColor[o] = col.r * gain;
   buf.altColor[o + 1] = col.g * gain;
   buf.altColor[o + 2] = col.b * gain;
-  buf.altScale[i] = 0.2 + Math.random() * 0.38;
-  buf.altKind[i] = 0;
+  buf.altScale[i] = 0.28 + Math.random() * 0.55;
+  buf.altKind[i] = Math.random() < 0.42 ? 1 : 0;
 }
 
 function fillStars(buf) {
@@ -613,8 +608,6 @@ const orbitHome = new THREE.Vector3();
 const orbitDest = new THREE.Vector3();
 const orbitScale = new THREE.Vector3();
 let held = null;
-let pinchNdc = null;
-
 function orbitItem(obj, kind) {
   obj.userData.kind = kind;
   obj.userData.ang = Math.random() * Math.PI * 2;
@@ -687,7 +680,7 @@ function makePhoto(tex) {
   );
   face.position.set(0, 0.08, 0.02);
   g.add(paper, face);
-  g.scale.setScalar(0.9);
+  g.scale.setScalar(1.05);
   return g;
 }
 
@@ -702,14 +695,15 @@ const giftColors = [
 for (let i = 0; i < giftColors.length; i++) {
   orbitItem(makeGift(giftColors[i][0], giftColors[i][1]), "gift");
 }
-const starters = [
-  [12, "night"],
-  [42, "warm"],
-  [200, "pine"],
-  [330, "rose"],
-];
-for (let i = 0; i < starters.length; i++) {
-  orbitItem(makePhoto(paintCard(starters[i][0], starters[i][1])), "photo");
+const localPhotos = ["/photos/01.jpg", "/photos/02.jpg", "/photos/03.jpg", "/photos/04.jpg"];
+const photoLoader = new THREE.TextureLoader();
+for (let i = 0; i < localPhotos.length; i++) {
+  const url = localPhotos[i];
+  const tex = photoLoader.load(url, () => {
+    console.log("本地照片好了", url);
+  });
+  tex.colorSpace = THREE.SRGBColorSpace;
+  orbitItem(makePhoto(tex), "photo");
 }
 
 function photosOnly() {
@@ -720,6 +714,30 @@ function photosOnly() {
   return list;
 }
 
+const aimNdc = new THREE.Vector3();
+function fingerToPhoto(nx, ny, photo) {
+  aimNdc.copy(photo.position).project(camera);
+  if (aimNdc.z > 1) return 99;
+  const sx = (aimNdc.x + 1) * 0.5;
+  const sy = (1 - aimNdc.y) * 0.5;
+  return Math.hypot(sx - nx, sy - ny);
+}
+
+function photoUnderFinger(nx, ny, limit) {
+  const photos = photosOnly();
+  let best = null;
+  let bestD = limit;
+  for (let i = 0; i < photos.length; i++) {
+    const d = fingerToPhoto(nx, ny, photos[i]);
+    if (d < bestD) {
+      bestD = d;
+      best = photos[i];
+    }
+  }
+  return best;
+}
+
+const aimEl = document.querySelector("#aim");
 const photoBtn = document.querySelector("#photos");
 const photoFile = document.querySelector("#photo-file");
 photoBtn.addEventListener("click", (e) => {
@@ -1063,7 +1081,11 @@ propMats.push(floor.material);
 
 let openAmt = 0;
 let openTarget = 0;
-let openScore = 0;
+let fistHold = 0;
+let palmHold = 0;
+let pinchHold = false;
+let handMiss = 0;
+let aimPhoto = null;
 let gesture = null;
 let seenTime = -1;
 let handTs = 0;
@@ -1080,30 +1102,27 @@ function handDist(a, b) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-// 指尖离指根比中间关节更远，就算这根手指伸直了
-function fingerOpen(lm, tip, pip, mcp) {
-  return handDist(lm[tip], lm[mcp]) > handDist(lm[pip], lm[mcp]) * 1.15;
+function isStraight(lm, tip, pip, mcp) {
+  const wrist = lm[0];
+  return (
+    handDist(lm[tip], wrist) > handDist(lm[pip], wrist) * 1.12 &&
+    handDist(lm[tip], wrist) > handDist(lm[mcp], wrist) * 1.28
+  );
 }
 
-function openFingers(lm) {
-  const ids = [
-    [8, 6, 5],
-    [12, 10, 9],
-    [16, 14, 13],
-    [20, 18, 17],
-  ];
-  let n = 0;
-  for (let i = 0; i < ids.length; i++) {
-    if (fingerOpen(lm, ids[i][0], ids[i][1], ids[i][2])) n++;
-  }
-  return n;
+function isCurled(lm, tip, pip, mcp) {
+  return handDist(lm[tip], lm[0]) < handDist(lm[mcp], lm[0]) * 1.12;
 }
 
-function noteHand(open) {
-  if (open) openScore = Math.min(1, openScore + 0.45);
-  else openScore = Math.max(0, openScore - 0.45);
-  if (openScore > 0.55) openTarget = 1;
-  else if (openScore < 0.45) openTarget = 0;
+function tipGap(img, world, a, b) {
+  return {
+    id: Math.hypot(img[a].x - img[b].x, img[a].y - img[b].y),
+    wd: world && world.length >= 21 ? handDist(world[a], world[b]) : 99,
+  };
+}
+
+function tipsTogether(gap, imgOn, worldOn) {
+  return gap.id < imgOn || gap.wd < worldOn;
 }
 
 function readHand() {
@@ -1120,42 +1139,102 @@ function readHand() {
     return;
   }
   const top = res.gestures && res.gestures[0] && res.gestures[0][0];
-  const lm = (res.worldLandmarks && res.worldLandmarks[0]) || (res.landmarks && res.landmarks[0]);
+  const world = res.worldLandmarks && res.worldLandmarks[0];
   const img = res.landmarks && res.landmarks[0];
-  if (!img || img.length < 21) return;
+  if (!img || img.length < 21) {
+    handMiss++;
+    if (handMiss < 8 && pinchHold) return;
+    aimEl.hidden = true;
+    held = null;
+    pinchHold = false;
+    aimPhoto = null;
+    fistHold = 0;
+    palmHold = 0;
+    return;
+  }
+  handMiss = 0;
+  const lm = world && world.length >= 21 ? world : img;
+  const idx = isStraight(lm, 8, 6, 5);
+  const mid = isStraight(lm, 12, 10, 9);
+  const ring = isStraight(lm, 16, 14, 13);
+  const pinky = isStraight(lm, 20, 18, 17);
+  const curls = [
+    isCurled(lm, 8, 6, 5),
+    isCurled(lm, 12, 10, 9),
+    isCurled(lm, 16, 14, 13),
+    isCurled(lm, 20, 18, 17),
+  ];
+  let nStraight = 0;
+  let nCurl = 0;
+  if (idx) nStraight++;
+  if (mid) nStraight++;
+  if (ring) nStraight++;
+  if (pinky) nStraight++;
+  for (let i = 0; i < curls.length; i++) if (curls[i]) nCurl++;
+  const named = top && top.categoryName && top.score > 0.55 ? top.categoryName : "";
+  // 四指伸直并且识别成掌，才算张开；四指蜷起并且识别成拳，才算握住
+  const palmOk = nStraight === 4 && named === "Open_Palm";
+  const fistOk = nCurl === 4 && named === "Closed_Fist";
+  if (palmOk) {
+    palmHold++;
+    fistHold = 0;
+  } else if (fistOk) {
+    fistHold++;
+    palmHold = 0;
+  } else {
+    palmHold = 0;
+    fistHold = 0;
+  }
+  if (palmHold === 8) {
+    openTarget = 1;
+    held = null;
+    pinchHold = false;
+    aimPhoto = null;
+    console.log("张掌，满天星");
+  }
+  if (fistHold === 8) {
+    openTarget = 0;
+    held = null;
+    pinchHold = false;
+    aimPhoto = null;
+    console.log("握拳，树");
+  }
 
-  // 拇指食指、食指小拇指：要捏的时候把照片拿出来，捏紧就收回去
-  const ti = Math.hypot(img[4].x - img[8].x, img[4].y - img[8].y);
-  const ip = Math.hypot(img[8].x - img[20].x, img[8].y - img[20].y);
-  const approach = (ti > 0.05 && ti < 0.15) || (ip > 0.055 && ip < 0.17);
-  const together = ti < 0.042 || ip < 0.046;
-  pinchNdc = { x: img[8].x, y: img[8].y };
+  // 食指对准哪张，拇指和食指（或食指和小拇指）捏住才放大。捏的时候食指是弯的，不能拿“伸直”当条件
+  const ti = tipGap(img, world, 4, 8);
+  const ip = tipGap(img, world, 8, 20);
+  // 其他手指可以弯着，只要不是整只握拳，捏合就能把对准的照片放大
+  const grabbing =
+    !fistOk &&
+    (tipsTogether(ti, pinchHold ? 0.17 : 0.12, pinchHold ? 0.085 : 0.06) ||
+      tipsTogether(ip, pinchHold ? 0.18 : 0.13, pinchHold ? 0.09 : 0.065));
 
-  if (approach && !together) {
-    if (!held) {
-      const photos = photosOnly();
-      if (photos.length) {
-        const i = Math.min(photos.length - 1, Math.floor(img[8].x * photos.length));
-        held = photos[i];
-        console.log("捏出照片", i);
+  const nx = 1 - img[8].x;
+  const ny = img[8].y;
+  aimEl.hidden = false;
+  aimEl.style.left = nx * 100 + "%";
+  aimEl.style.top = ny * 100 + "%";
+
+  const near = photoUnderFinger(nx, ny, 0.2);
+  if (near) aimPhoto = near;
+  else if (aimPhoto && fingerToPhoto(nx, ny, aimPhoto) > 0.34) aimPhoto = null;
+
+  if (grabbing) {
+    if (!pinchHold) {
+      const hit = photoUnderFinger(nx, ny, 0.28) || aimPhoto;
+      if (hit) {
+        held = hit;
+        pinchHold = true;
+        console.log("捏合放大");
       }
     }
     return;
   }
-  if (held && together) {
+  if (pinchHold) {
+    pinchHold = false;
     held = null;
-    console.log("照片回去");
+    console.log("松开，照片回去");
   }
-
-  const n = lm && lm.length >= 21 ? openFingers(lm) : 0;
-  const fist = (top && top.categoryName === "Closed_Fist" && top.score > 0.4) || n <= 1;
-  const palm =
-    (top &&
-      (top.categoryName === "Open_Palm" || top.categoryName === "Victory" || top.categoryName === "ILoveYou") &&
-      top.score > 0.4) ||
-    n >= 3;
-  if (fist && n <= 1) noteHand(false);
-  else if (palm) noteHand(true);
 }
 
 async function makeGesture(vision, delegate) {
@@ -1244,7 +1323,7 @@ function frameBody(now) {
   uniforms.uOpen.value = openAmt;
   titleEl.style.opacity = openAmt > 0.42 ? "0" : String(1 - openAmt / 0.42);
   scene.fog.density = 0.011 * (1 - openAmt * 0.45);
-  bloom.intensity = 1.05 - openAmt * 0.9;
+  bloom.intensity = 1.05 - openAmt * 0.22;
 
   if (intro >= 1 && !reduceMotion && !pressing && !held) {
     controls.autoRotate = true;
@@ -1258,28 +1337,28 @@ function frameBody(now) {
     let rad = obj.userData.rad;
     let y = obj.userData.y0;
     if (ball > 0.02) {
-      const sph = 4.4 + Math.sin(obj.userData.phase) * 0.55;
+      const sph = 4.3 + Math.sin(obj.userData.phase) * 0.9;
       rad = rad + (sph - rad) * ball;
-      const yBall = 2.7 + Math.sin(ang * 1.7 + obj.userData.phase) * 2.8;
+      const yBall = 4.7 + Math.sin(ang * 1.3 + obj.userData.phase) * 1.7;
       y = y + (yBall - y) * ball;
     }
     orbitHome.set(Math.cos(ang) * rad, y, Math.sin(ang) * rad);
     if (obj === held) {
-      camera.getWorldDirection(orbitDest);
-      orbitDest.multiplyScalar(5.2).add(camera.position);
-      if (pinchNdc) {
-        orbitDest.x += (pinchNdc.x - 0.5) * 2.2;
-        orbitDest.y += (0.5 - pinchNdc.y) * 1.4;
-      }
+      orbitDest.copy(orbitHome).lerp(camera.position, 0.36);
       obj.position.lerp(orbitDest, 1 - Math.exp(-dt * 7));
       obj.lookAt(camera.position);
-      orbitScale.set(2.7, 2.7, 2.7);
-      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 7));
+      const big = obj.userData.home * 3.15;
+      orbitScale.set(big, big, big);
+      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 8));
     } else {
       obj.position.lerp(orbitHome, 1 - Math.exp(-dt * 4.5));
-      obj.rotation.y = ang + time * 0.55;
-      obj.rotation.z = Math.sin(time * 0.7 + obj.userData.phase) * 0.18;
-      const s = obj.userData.home;
+      if (obj.userData.kind === "photo") obj.lookAt(camera.position);
+      else {
+        obj.rotation.y = ang + time * 0.55;
+        obj.rotation.z = Math.sin(time * 0.7 + obj.userData.phase) * 0.18;
+      }
+      let s = obj.userData.home;
+      if (obj.userData.kind === "photo") s *= 1 + ball * 0.9;
       orbitScale.set(s, s, s);
       obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 5));
     }
