@@ -36,7 +36,7 @@ canvas {
 
 h1 {
   position: fixed;
-  top: clamp(14px, 2.4vh, 28px);
+  top: clamp(22px, 3.6vh, 42px);
   left: 50%;
   bottom: auto;
   transform: translateX(-50%);
@@ -47,10 +47,10 @@ h1 {
   text-align: center;
   font-family: "Cormorant Garamond", Palatino, "Palatino Linotype", Georgia, serif;
   font-style: italic;
-  font-weight: 600;
-  font-size: clamp(48px, 5.4vw, 80px);
-  line-height: 0.92;
-  letter-spacing: 0.01em;
+  font-weight: 500;
+  font-size: clamp(34px, 3.6vw, 54px);
+  line-height: 1.05;
+  letter-spacing: 0.08em;
   color: #ffffff;
   text-shadow:
     0 2px 18px rgba(5, 10, 22, 0.9),
@@ -118,8 +118,9 @@ button[aria-pressed="true"] {
 
 @media (max-width: 640px) {
   h1 {
-    top: 18px;
-    font-size: 40px;
+    top: 16px;
+    font-size: 30px;
+    letter-spacing: 0.04em;
     max-width: 92vw;
   }
   button {

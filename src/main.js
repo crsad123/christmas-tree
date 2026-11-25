@@ -150,11 +150,11 @@ scene.fog = new THREE.FogExp2(0x07111f, 0.011);
 const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 90);
 const narrow0 = window.innerWidth < window.innerHeight;
 const camFrom = new THREE.Vector3(3.6, 7.4, narrow0 ? 24 : 18);
-const camTo = new THREE.Vector3(narrow0 ? 0.06 : 0.1, narrow0 ? 4.5 : 4.28, narrow0 ? 18.4 : 15.4);
+const camTo = new THREE.Vector3(narrow0 ? 0.04 : 0.06, narrow0 ? 5.45 : 5.25, narrow0 ? 21.2 : 18.6);
 camera.position.copy(reduceMotion ? camTo : camFrom);
 
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 3.85, 0);
+controls.target.set(0, 5.15, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.autoRotate = !reduceMotion;
@@ -181,7 +181,7 @@ const treeLamp = new THREE.PointLight(0xd5e6ff, 8, 10, 2);
 treeLamp.position.set(0.15, 3.2, 0.4);
 scene.add(treeLamp);
 const starLamp = new THREE.PointLight(0xfff4dd, 26, 7, 2);
-starLamp.position.set(0, 6.5, 0.15);
+starLamp.position.set(0, 6.58, 0.2);
 scene.add(starLamp);
 
 const uniforms = {
@@ -483,7 +483,7 @@ function makeStarShape() {
   const shape = new THREE.Shape();
   const spikes = 5;
   for (let i = 0; i < spikes * 2; i++) {
-    const r = i % 2 === 0 ? 0.46 : 0.18;
+    const r = i % 2 === 0 ? 0.52 : 0.2;
     const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
     const x = Math.cos(a) * r;
     const y = Math.sin(a) * r;
@@ -492,29 +492,33 @@ function makeStarShape() {
   }
   shape.closePath();
   const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.12,
+    depth: 0.07,
     bevelEnabled: true,
-    bevelThickness: 0.03,
-    bevelSize: 0.02,
-    bevelSegments: 1,
+    bevelThickness: 0.02,
+    bevelSize: 0.016,
+    bevelSegments: 2,
   });
   geo.center();
   return geo;
 }
 
-const star = new THREE.Mesh(
-  makeStarShape(),
-  new THREE.MeshStandardMaterial({
-    color: 0xfff8ee,
-    emissive: 0xfff3d4,
-    emissiveIntensity: 2.8,
-    metalness: 0.55,
-    roughness: 0.16,
-  })
-);
-star.position.y = 6.48;
-star.scale.setScalar(0.72);
-tree.add(star);
+// 薄金星，每帧正对镜头，轮廓才不会侧没
+const starMat = new THREE.MeshPhysicalMaterial({
+  color: 0xf8e2a8,
+  emissive: 0xfff0c8,
+  emissiveIntensity: 0.55,
+  metalness: 0.92,
+  roughness: 0.18,
+  clearcoat: 1,
+  clearcoatRoughness: 0.06,
+});
+const starPivot = new THREE.Group();
+starPivot.position.y = 6.58;
+const star = new THREE.Mesh(makeStarShape(), starMat);
+star.scale.setScalar(1.22);
+star.renderOrder = 6;
+starPivot.add(star);
+tree.add(starPivot);
 
 function circleTex() {
   const c = document.createElement("canvas");
@@ -536,20 +540,27 @@ function flareTex() {
   c.width = c.height = 512;
   const g = c.getContext("2d");
   g.translate(256, 256);
-  const grd = g.createRadialGradient(0, 0, 0, 0, 0, 90);
-  grd.addColorStop(0, "rgba(255,255,255,1)");
-  grd.addColorStop(0.28, "rgba(255,248,230,0.45)");
-  grd.addColorStop(1, "rgba(255,248,230,0)");
-  g.fillStyle = grd;
+  const core = g.createRadialGradient(0, 0, 0, 0, 0, 36);
+  core.addColorStop(0, "rgba(255,252,240,0.95)");
+  core.addColorStop(0.45, "rgba(255,214,140,0.28)");
+  core.addColorStop(1, "rgba(255,214,140,0)");
+  g.fillStyle = core;
   g.fillRect(-256, -256, 512, 512);
-  const rays = 16;
+  const rays = 10;
   for (let i = 0; i < rays; i++) {
     g.save();
     g.rotate((i / rays) * Math.PI);
     const long = i % 2 === 0;
-    g.strokeStyle = long ? "rgba(255,252,244,0.92)" : "rgba(232,240,255,0.38)";
-    g.lineWidth = long ? 2.4 : 1.2;
-    const len = long ? 248 : 150;
+    const len = long ? 228 : 128;
+    const grad = g.createLinearGradient(-len, 0, len, 0);
+    grad.addColorStop(0, "rgba(255,220,150,0)");
+    grad.addColorStop(0.38, long ? "rgba(255,236,190,0.9)" : "rgba(255,214,150,0.4)");
+    grad.addColorStop(0.5, "rgba(255,252,244,1)");
+    grad.addColorStop(0.62, long ? "rgba(255,236,190,0.9)" : "rgba(255,214,150,0.4)");
+    grad.addColorStop(1, "rgba(255,220,150,0)");
+    g.strokeStyle = grad;
+    g.lineWidth = long ? 3.2 : 1.4;
+    g.lineCap = "round";
     g.beginPath();
     g.moveTo(-len, 0);
     g.lineTo(len, 0);
@@ -564,30 +575,33 @@ function flareTex() {
 const starGlow = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: flareTex(),
-    color: 0xffe7bf,
+    color: 0xffe2a8,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: 0.92,
+    depthTest: false,
+    opacity: 0.95,
   })
 );
-starGlow.position.y = 6.48;
-starGlow.material.color.set(0xf3f7ff);
-starGlow.scale.set(2.05, 2.05, 1);
+starGlow.position.y = 6.58;
+starGlow.scale.set(3.55, 3.55, 1);
+starGlow.renderOrder = 4;
 tree.add(starGlow);
 
 const starHalo = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: circleTex(),
-    color: 0xfff6e4,
+    color: 0xffd98a,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    opacity: 0.7,
+    depthTest: false,
+    opacity: 0.42,
   })
 );
-starHalo.position.y = 6.48;
-starHalo.scale.set(1.7, 1.7, 1);
+starHalo.position.y = 6.58;
+starHalo.scale.set(0.85, 0.85, 1);
+starHalo.renderOrder = 3;
 tree.add(starHalo);
 
 const snowTex = circleTex();
@@ -1107,11 +1121,11 @@ function frameBody(now) {
   }
 
   treeLamp.intensity = (7 + Math.sin(time * 2.4) * 1.4) * treeFade;
-  starLamp.intensity = 28 * treeFade;
-  star.rotation.y = time * 0.9;
-  star.rotation.z = Math.sin(time * 1.1) * 0.06;
-  starGlow.material.opacity = (0.82 + Math.sin(time * 3.2) * 0.12) * treeFade;
-  starHalo.material.opacity = (0.55 + Math.sin(time * 2.4) * 0.12) * treeFade;
+  starLamp.intensity = 14 * treeFade;
+  starPivot.lookAt(camera.position);
+  star.rotation.z = time * 0.18;
+  starGlow.material.opacity = (0.88 + Math.sin(time * 2.2) * 0.08) * treeFade;
+  starHalo.material.opacity = (0.38 + Math.sin(time * 1.6) * 0.08) * treeFade;
   ringPts.rotation.y = time * 0.55;
   ringMat.opacity = 0.92 * treeFade;
 
