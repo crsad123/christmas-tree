@@ -3,6 +3,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer, EffectPass, RenderPass, BloomEffect, VignetteEffect } from "postprocessing";
 import "./style.css";
+import "@fontsource/noto-serif-sc/chinese-simplified-500.css";
+import "@fontsource/noto-serif-sc/chinese-simplified-600.css";
+import "@fontsource/ma-shan-zheng/chinese-simplified-400.css";
+import "@fontsource/great-vibes/400.css";
 
 const vert = `
 attribute vec3 aChaos;
@@ -24,27 +28,32 @@ attribute float aAltKind;
 uniform float uPointerAmt;
 uniform float uGain;
 uniform float uOpen;
+uniform float uHeartPulse;
 
 varying vec3 vColor;
 varying float vAlpha;
 varying float vKind;
 
 void main() {
-  float form = smoothstep(aDelay, aDelay + 0.22, uAssemble);
+  float form = smoothstep(aDelay, aDelay + 0.28, uAssemble);
   vec3 treePos = position;
   float rad = length(treePos.xz);
   float ribbon = step(0.15, aKind) * (1.0 - step(0.45, aKind));
   if (rad > 0.001) {
-    float ang = atan(treePos.z, treePos.x) + uTime * mix(0.72, 1.85, ribbon);
+    float ang = atan(treePos.z, treePos.x) + uTime * mix(0.15, 0.42, ribbon);
     treePos.x = cos(ang) * rad;
     treePos.z = sin(ang) * rad;
   }
   vec3 settled = mix(treePos, aAlt, uOpen);
+  if (uOpen > 0.72 && aAltKind < 1.5) {
+    vec3 heartC = vec3(0.0, 3.4, 0.0);
+    settled = heartC + (settled - heartC) * uHeartPulse;
+  }
   float scatter = sin(clamp(uOpen, 0.0, 1.0) * 3.14159265);
   float letterish = step(1.5, aAltKind);
   float spin = uTime * 2.4 + aPhase * 6.28318;
   vec3 boom = aChaos;
-  float swirl = scatter * (2.4 + aPhase * 3.2) * (1.0 - letterish * 0.7);
+  float swirl = scatter * (5.2 + aPhase * 4.8) * (1.0 - letterish * 0.45);
   boom.x += cos(spin) * swirl;
   boom.z += sin(spin) * swirl;
   boom.y += sin(spin * 0.8 + aPhase) * swirl * 0.35;
@@ -60,7 +69,8 @@ void main() {
   vec3 heart = pos - vec3(0.0, 2.5, 0.0);
   float heartLen = length(heart);
   vec3 heartDir = heartLen > 0.001 ? heart / heartLen : vec3(0.0, 1.0, 0.0);
-  pos += heartDir * uBurst * (0.28 + aPhase * 0.9);
+  // 烟花不要把圣诞树粒子撑开
+  if (uOpen > 0.7) pos += heartDir * uBurst * (0.22 + aPhase * 0.55);
 
   vec3 away = pos - uPointer;
   float dist = length(away);
@@ -77,14 +87,26 @@ void main() {
   else blink = 0.62 + 0.38 * pow(0.5 + 0.5 * sin(uTime * 4.2 + aPhase * 18.0), 2.0);
 
   float scaleNow = mix(aScale, aAltScale, uOpen);
-  scaleNow *= 1.0 + scatter * 0.35 * (1.0 - step(1.5, shown));
+  float treePart = 1.0 - step(0.5, aKind);
+  scaleNow *= 1.0 + scatter * 0.35 * (1.0 - step(1.5, shown)) * (1.0 - treePart);
+  if (uOpen > 0.72 && aAltKind < 1.5) scaleNow *= uHeartPulse;
   vec3 colNow = mix(aColor, aAltColor, uOpen);
+  float sizeBlink = blink;
+  if (shown < 0.5 || (shown > 0.5 && shown < 1.5)) {
+    /* 彩灯可以继续闪 */
+  } else if (uOpen < 0.08) {
+    sizeBlink = 1.0;
+  } else if (uOpen > 0.72 && aAltKind < 1.5) {
+    sizeBlink = 1.0;
+  }
   if (shown > 1.5) {
     gl_PointSize = clamp(scaleNow * (360.0 / max(1.0, -mv.z)), 3.2, 15.0);
   } else {
-    gl_PointSize = clamp(scaleNow * (0.9 + blink * 0.2) * (255.0 / max(1.0, -mv.z)), 1.7, 28.0);
+    gl_PointSize = clamp(scaleNow * (0.9 + sizeBlink * 0.2) * (255.0 / max(1.0, -mv.z)), 1.7, 28.0);
   }
-  vColor = colNow * blink * uGain;
+  float treeFoliage = (1.0 - step(0.5, aKind)) * (1.0 - step(0.55, uOpen));
+  float showBlink = mix(blink, 1.0, treeFoliage);
+  vColor = colNow * showBlink * uGain;
   vAlpha = shown > 1.5 ? 1.0 : 0.92;
   vKind = shown;
 }
@@ -137,28 +159,28 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
-renderer.setClearColor(0x07111f, 1);
+renderer.setClearColor(0x06101c, 1);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x07111f);
-scene.fog = new THREE.FogExp2(0x07111f, 0.011);
+scene.background = new THREE.Color(0x06101c);
+scene.fog = new THREE.FogExp2(0x06101c, 0.011);
 
-const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 90);
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 100);
 const narrow0 = window.innerWidth < window.innerHeight;
-const camFrom = new THREE.Vector3(3.6, 7.4, narrow0 ? 24 : 18);
-const camTo = new THREE.Vector3(narrow0 ? 0.04 : 0.06, narrow0 ? 5.45 : 5.25, narrow0 ? 21.2 : 18.6);
+const camFrom = new THREE.Vector3(0.15, 4.6, narrow0 ? 32 : 24.2);
+const camTo = new THREE.Vector3(narrow0 ? 0 : 0.04, narrow0 ? 4.85 : 4.35, narrow0 ? 33 : 23.4);
 camera.position.copy(reduceMotion ? camTo : camFrom);
 
 const controls = new OrbitControls(camera, canvas);
-controls.target.set(0, 5.15, 0);
+controls.target.set(0, 3.55, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.autoRotate = !reduceMotion;
-controls.autoRotateSpeed = 0.22;
-controls.minDistance = 6.5;
-controls.maxDistance = 22;
-controls.minPolarAngle = 0.72;
-controls.maxPolarAngle = 1.45;
+controls.autoRotateSpeed = 0.14;
+controls.minDistance = 10;
+controls.maxDistance = 34;
+controls.minPolarAngle = 0.82;
+controls.maxPolarAngle = 1.62;
 controls.enabled = reduceMotion;
 controls.update();
 
@@ -166,18 +188,18 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
 pmrem.dispose();
 
-scene.add(new THREE.AmbientLight(0xc9d8ea, 0.42));
-const hemi = new THREE.HemisphereLight(0xf5f8ff, 0x0b1828, 0.62);
+scene.add(new THREE.AmbientLight(0xb9cfe6, 0.36));
+const hemi = new THREE.HemisphereLight(0xe4f0ff, 0x07111e, 0.52);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xe7eef8, 0.85);
+const sun = new THREE.DirectionalLight(0xd5e6f8, 0.62);
 sun.position.set(-4, 8, 6);
 scene.add(sun);
 
-const treeLamp = new THREE.PointLight(0xd5e6ff, 8, 10, 2);
-treeLamp.position.set(0.15, 3.2, 0.4);
+const treeLamp = new THREE.PointLight(0x8eb8ee, 7, 13, 2);
+treeLamp.position.set(0.12, 3.8, 0.35);
 scene.add(treeLamp);
-const starLamp = new THREE.PointLight(0xfff4dd, 26, 7, 2);
-starLamp.position.set(0, 6.58, 0.2);
+const starLamp = new THREE.PointLight(0xd7e8ff, 12, 9, 2);
+starLamp.position.set(0, 8.05, 0.2);
 scene.add(starLamp);
 
 const uniforms = {
@@ -188,6 +210,7 @@ const uniforms = {
   uPointerAmt: { value: 0 },
   uGain: { value: 1 },
   uOpen: { value: 0 },
+  uHeartPulse: { value: 1 },
 };
 
 function makeMat(blending, gain) {
@@ -200,6 +223,7 @@ function makeMat(blending, gain) {
       uPointerAmt: uniforms.uPointerAmt,
       uGain: { value: gain },
       uOpen: uniforms.uOpen,
+      uHeartPulse: uniforms.uHeartPulse,
     },
     vertexShader: vert,
     fragmentShader: frag,
@@ -216,8 +240,8 @@ const tinselMat = makeMat(THREE.AdditiveBlending, 1);
 // 银白光锥，外圈密一点，轮廓干净
 function branchSample() {
   const t = Math.random();
-  const y = (1 - t) * 6.15 + 0.22;
-  const envelope = 0.05 + Math.pow(t, 1.06) * 2.42;
+  const y = (1 - t) * 7.5 + 0.16;
+  const envelope = 0.06 + Math.pow(t, 1.04) * 3.12;
   const radial = Math.pow(Math.random(), 0.48);
   const ang = Math.random() * Math.PI * 2;
   const wobble = 1 + Math.sin(ang * 4.0 + t * 20.0) * 0.03;
@@ -235,9 +259,9 @@ function branchSample() {
 
 function chaosOf() {
   const ang = Math.random() * Math.PI * 2;
-  const rad = 7 + Math.pow(Math.random(), 0.45) * 18;
-  const y = (Math.random() - 0.42) * 18;
-  return [Math.cos(ang) * rad, y, Math.sin(ang) * rad * 0.72];
+  const rad = 0.15 + Math.random() * 1.55;
+  const y = -3.4 - Math.random() * 4.6;
+  return [Math.cos(ang) * rad, y, Math.sin(ang) * rad];
 }
 
 function pushPoint(buf, i, p, color, scale, kind) {
@@ -254,7 +278,8 @@ function pushPoint(buf, i, p, color, scale, kind) {
   buf.color[o + 1] = col.g;
   buf.color[o + 2] = col.b;
   buf.scale[i] = scale;
-  buf.delay[i] = Math.random() * 0.18 + (1 - (p.t || 0)) * 0.06;
+  // 树尖晚点到，看起来是从下往上长
+  buf.delay[i] = Math.random() * 0.08 + (1 - (p.t || 0)) * 0.46;
   buf.phase[i] = Math.random();
   buf.kind[i] = kind;
 }
@@ -291,34 +316,67 @@ function toGeo(buf) {
   return geo;
 }
 
-// 张掌以后铺开的满天星，不是一小团球
-function putStar(buf, i) {
-  const phi = Math.acos(2 * Math.random() - 1);
-  const theta = Math.random() * Math.PI * 2;
-  const rad = 3.4 + Math.pow(Math.random(), 0.62) * 6.4;
+const heartS = 3.55;
+const heartY = 3.4;
+const TREE_SIZE = 1.32;
+const TREE_REST_Y = -1.15;
+
+function heartInside(x, y) {
+  const a = x * x + y * y - 1;
+  return a * a * a - x * x * y * y * y <= 0.02;
+}
+
+function heartFill() {
+  for (let n = 0; n < 40; n++) {
+    const x = Math.random() * 2.4 - 1.2;
+    const y = Math.random() * 2.6 - 1.3;
+    if (heartInside(x, y)) {
+      return [x * heartS, y * heartS + heartY, (Math.random() - 0.5) * 0.5];
+    }
+  }
+  return [0, heartY, 0];
+}
+
+function heartShell() {
+  const t = Math.random() * Math.PI * 2;
+  const x = Math.pow(Math.sin(t), 3) * 16;
+  const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+  const yTop = 1.24 * heartS + heartY;
+  const yBot = -1.13 * heartS + heartY;
+  return [
+    (x / 16) * 1.15 * heartS + (Math.random() - 0.5) * 0.06,
+    ((y + 17) / 28.92) * (yTop - yBot) + yBot + (Math.random() - 0.5) * 0.06,
+    (Math.random() - 0.5) * 0.16,
+  ];
+}
+
+function putHeart(buf, i, shell) {
+  const p = shell ? heartShell() : heartFill();
   const o = i * 3;
-  buf.alt[o] = Math.sin(phi) * Math.cos(theta) * rad;
-  buf.alt[o + 1] = 2.2 + Math.random() * 6.6;
-  buf.alt[o + 2] = Math.sin(phi) * Math.sin(theta) * rad * 0.72;
-  const palette = [0xff4d6a, 0xffc14d, 0x3dce7a, 0x4aa3ff, 0xff6b9a, 0xfff1c9, 0xb388ff];
-  const col = new THREE.Color(palette[i % palette.length]);
-  const gain = 1.45;
+  buf.alt[o] = p[0];
+  buf.alt[o + 1] = p[1];
+  buf.alt[o + 2] = p[2];
+  const cols = shell
+    ? [0x8ec6ff, 0xf0d29a, 0xd7e8ff, 0xf6e2b4, 0x6eb4f2]
+    : [0x1d6ec8, 0x3c92ea, 0x67b4f5, 0xe8d2a4, 0x4d96ea];
+  const col = new THREE.Color(cols[i % cols.length]);
+  const gain = shell ? 1.55 : 1.22;
   buf.altColor[o] = col.r * gain;
   buf.altColor[o + 1] = col.g * gain;
   buf.altColor[o + 2] = col.b * gain;
-  buf.altScale[i] = 0.28 + Math.random() * 0.55;
-  buf.altKind[i] = Math.random() < 0.42 ? 1 : 0;
+  buf.altScale[i] = shell ? 0.22 + Math.random() * 0.24 : 0.34 + Math.random() * 0.22;
+  buf.altKind[i] = shell ? 1 : 0;
 }
 
-function fillStars(buf) {
+function fillHeart(buf, shell) {
   const n = buf.altScale.length;
-  for (let i = 0; i < n; i++) putStar(buf, i);
+  for (let i = 0; i < n; i++) putHeart(buf, i, shell);
 }
 
 const foliageN = 20000;
 const foliage = alloc(foliageN);
-const iceIn = [0x7a1830, 0x0d5a34, 0x163a78, 0x6a320c];
-const iceOut = [0xff3358, 0x35d67a, 0x3d8dff, 0xffc14d, 0xff5fa2, 0xfff0c2];
+const iceIn = [0x145fb8, 0x1c74d4, 0x207edc, 0x1868c8];
+const iceOut = [0x3d96ee, 0x58aaef, 0x2f82dc, 0x6eb4f2];
 
 for (let i = 0; i < foliageN; i++) {
   const p = branchSample();
@@ -328,10 +386,11 @@ for (let i = 0; i < foliageN; i++) {
     color = iceOut[i % 3];
     scale = 0.32 + Math.random() * 0.4;
   }
-  if (Math.random() < 0.12) color = iceOut[(i + 2) % iceOut.length];
+  if (Math.random() < 0.045) color = 0xf0d09a;
+  else if (Math.random() < 0.1) color = iceOut[(i + 2) % iceOut.length];
   pushPoint(foliage, i, p, color, scale, 0);
   const o = i * 3;
-  const gain = p.radial > 0.75 ? 1.85 : 1.45;
+  const gain = p.radial > 0.75 ? 1.45 : 1.22;
   foliage.color[o] *= gain;
   foliage.color[o + 1] *= gain;
   foliage.color[o + 2] *= gain;
@@ -339,7 +398,7 @@ for (let i = 0; i < foliageN; i++) {
 
 const lightN = 520;
 const lights = alloc(lightN);
-const bulbs = [0xff2d4a, 0xffc14d, 0x3dce7a, 0x4aa3ff, 0xff6b9a, 0xfff1c9];
+const bulbs = [0x7ec4ff, 0x4d96ea, 0xd6ecff, 0x9fd4ff, 0x6eb4f2, 0xf0d29a];
 for (let i = 0; i < lightN; i++) {
   let p = branchSample();
   let guard = 0;
@@ -364,16 +423,16 @@ for (let r = 0; r < ribbonCount; r++) {
   for (let i = 0; i < perRibbon; i++) {
     const t = i / (perRibbon - 1);
     const ang = t * 4.6 * Math.PI * 2 + (r / ribbonCount) * Math.PI * 2;
-    const envelope = 0.08 + Math.pow(t, 1.04) * 2.52;
+    const envelope = 0.1 + Math.pow(t, 1.04) * 3.22;
     const radius = envelope + (Math.random() - 0.5) * 0.07;
     const p = {
       x: Math.cos(ang) * radius,
-      y: (1 - t) * 6.15 + 0.22 + (Math.random() - 0.5) * 0.05,
+      y: (1 - t) * 7.5 + 0.16 + (Math.random() - 0.5) * 0.05,
       z: Math.sin(ang) * radius,
       t,
     };
     const idx = r * perRibbon + i;
-    const ribbonCol = [0xffd56a, 0xff5d8a, 0x7ec8ff];
+    const ribbonCol = [0x8ec8f8, 0x5aa6ef, 0xe8d09a];
     const color = ribbonCol[r % ribbonCol.length];
     pushPoint(tinsel, idx, p, color, 0.28 + Math.random() * 0.22, 0.25);
     const o = idx * 3;
@@ -383,9 +442,9 @@ for (let r = 0; r < ribbonCount; r++) {
   }
 }
 
-fillStars(foliage);
-fillStars(lights);
-fillStars(tinsel);
+fillHeart(foliage, false);
+fillHeart(lights, true);
+fillHeart(tinsel, true);
 
 const tree = new THREE.Group();
 scene.add(tree);
@@ -395,87 +454,13 @@ const tinselPts = new THREE.Points(toGeo(tinsel), tinselMat);
 tree.add(foliagePts);
 tree.add(lightPts);
 tree.add(tinselPts);
-
-function touchPts(pts) {
-  const g = pts.geometry;
-  g.getAttribute("aAlt").needsUpdate = true;
-  g.getAttribute("aAltColor").needsUpdate = true;
-  g.getAttribute("aAltScale").needsUpdate = true;
-  g.getAttribute("aAltKind").needsUpdate = true;
+tree.scale.setScalar(TREE_SIZE);
+if (!reduceMotion) {
+  tree.position.y = -11.4 * TREE_SIZE;
+  tree.rotation.y = Math.PI * 2.7;
 }
 
-// 衬线笔画上均匀撒点，每格只留一颗，字才站得住
-async function stampWords() {
-  try {
-    await Promise.race([
-      document.fonts.ready.then(() => document.fonts.load('italic 280px "Cormorant Garamond"')),
-      new Promise((r) => setTimeout(r, 2500)),
-    ]);
-  } catch (err) {
-    console.error(err);
-  }
-  const c = document.createElement("canvas");
-  c.width = 2400;
-  c.height = 980;
-  const g = c.getContext("2d", { willReadFrequently: true });
-  g.clearRect(0, 0, c.width, c.height);
-  g.fillStyle = "#fff";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  const family = '"Cormorant Garamond", Palatino, Georgia, serif';
-  let size = 300;
-  g.font = "italic " + size + "px " + family;
-  if ("letterSpacing" in g) g.letterSpacing = "8px";
-  while (g.measureText("leaned toward you").width > 2140 && size > 150) {
-    size -= 6;
-    g.font = "italic " + size + "px " + family;
-  }
-  const lines = [
-    ["Every light", c.height * 0.36],
-    ["leaned toward you", c.height * 0.68],
-  ];
-  for (let i = 0; i < lines.length; i++) {
-    g.fillText(lines[i][0], c.width / 2, lines[i][1]);
-  }
-  const img = g.getImageData(0, 0, c.width, c.height).data;
-  const cell = 2;
-  const ink = [];
-  for (let y = 0; y < c.height; y += cell) {
-    for (let x = 0; x < c.width; x += cell) {
-      const px = Math.min(c.width - 1, x + 1);
-      const py = Math.min(c.height - 1, y + 1);
-      if (img[(py * c.width + px) * 4 + 3] > 150) ink.push(px, py);
-    }
-  }
-  const pairs = ink.length / 2;
-  if (!pairs) {
-    console.log("文字没采到");
-    return;
-  }
-  const col = new THREE.Color(0xf7fbff);
-  const cap = 7200;
-  const budget = Math.min(cap, pairs, foliage.altScale.length);
-  const stride = pairs / budget;
-  for (let i = 0; i < budget; i++) {
-    const id = Math.min(pairs - 1, Math.floor(i * stride));
-    const x = ink[id * 2];
-    const y = ink[id * 2 + 1];
-    const o = i * 3;
-    foliage.alt[o] = (x / c.width - 0.5) * 10.4;
-    foliage.alt[o + 1] = (0.5 - y / c.height) * 3.85 + 2.35;
-    foliage.alt[o + 2] = 0;
-    foliage.altColor[o] = col.r;
-    foliage.altColor[o + 1] = col.g;
-    foliage.altColor[o + 2] = col.b;
-    foliage.altScale[i] = 0.34;
-    foliage.altKind[i] = 2;
-  }
-  touchPts(foliagePts);
-  touchPts(lightPts);
-  touchPts(tinselPts);
-  console.log("文字采样", pairs, "用了", budget, "字号", size);
-}
-// 这支上张开手是彩球，不再印那句字
+// 张开是爱心，字写在页面上
 
 function makeStarShape() {
   const shape = new THREE.Shape();
@@ -502,18 +487,18 @@ function makeStarShape() {
 
 // 薄金星，每帧正对镜头，轮廓才不会侧没
 const starMat = new THREE.MeshPhysicalMaterial({
-  color: 0xf8e2a8,
-  emissive: 0xfff0c8,
-  emissiveIntensity: 0.55,
-  metalness: 0.92,
-  roughness: 0.18,
+  color: 0xfff3dc,
+  emissive: 0xf0d4a4,
+  emissiveIntensity: 0.45,
+  metalness: 0.88,
+  roughness: 0.16,
   clearcoat: 1,
-  clearcoatRoughness: 0.06,
+  clearcoatRoughness: 0.08,
 });
 const starPivot = new THREE.Group();
-starPivot.position.y = 6.58;
+starPivot.position.y = 8.05;
 const star = new THREE.Mesh(makeStarShape(), starMat);
-star.scale.setScalar(1.22);
+star.scale.setScalar(0.95);
 star.renderOrder = 6;
 starPivot.add(star);
 tree.add(starPivot);
@@ -539,9 +524,9 @@ function flareTex() {
   const g = c.getContext("2d");
   g.translate(256, 256);
   const core = g.createRadialGradient(0, 0, 0, 0, 0, 36);
-  core.addColorStop(0, "rgba(255,252,240,0.95)");
-  core.addColorStop(0.45, "rgba(255,214,140,0.28)");
-  core.addColorStop(1, "rgba(255,214,140,0)");
+  core.addColorStop(0, "rgba(244,250,255,0.95)");
+  core.addColorStop(0.45, "rgba(158,196,240,0.3)");
+  core.addColorStop(1, "rgba(158,196,240,0)");
   g.fillStyle = core;
   g.fillRect(-256, -256, 512, 512);
   const rays = 10;
@@ -551,11 +536,11 @@ function flareTex() {
     const long = i % 2 === 0;
     const len = long ? 228 : 128;
     const grad = g.createLinearGradient(-len, 0, len, 0);
-    grad.addColorStop(0, "rgba(255,220,150,0)");
-    grad.addColorStop(0.38, long ? "rgba(255,236,190,0.9)" : "rgba(255,214,150,0.4)");
-    grad.addColorStop(0.5, "rgba(255,252,244,1)");
-    grad.addColorStop(0.62, long ? "rgba(255,236,190,0.9)" : "rgba(255,214,150,0.4)");
-    grad.addColorStop(1, "rgba(255,220,150,0)");
+    grad.addColorStop(0, "rgba(190,220,255,0)");
+    grad.addColorStop(0.38, long ? "rgba(226,240,255,0.92)" : "rgba(170,206,245,0.42)");
+    grad.addColorStop(0.5, "rgba(248,252,255,1)");
+    grad.addColorStop(0.62, long ? "rgba(226,240,255,0.92)" : "rgba(170,206,245,0.42)");
+    grad.addColorStop(1, "rgba(190,220,255,0)");
     g.strokeStyle = grad;
     g.lineWidth = long ? 3.2 : 1.4;
     g.lineCap = "round";
@@ -573,30 +558,30 @@ function flareTex() {
 const starGlow = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: flareTex(),
-    color: 0xffe2a8,
+    color: 0xffe6c0,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     opacity: 0.95,
   })
 );
-starGlow.position.y = 6.58;
-starGlow.scale.set(3.55, 3.55, 1);
+starGlow.position.y = 8.05;
+starGlow.scale.set(1.75, 1.75, 1);
 starGlow.renderOrder = 4;
 tree.add(starGlow);
 
 const starHalo = new THREE.Sprite(
   new THREE.SpriteMaterial({
     map: circleTex(),
-    color: 0xffd98a,
+    color: 0x9ec8ff,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     opacity: 0.42,
   })
 );
-starHalo.position.y = 6.58;
-starHalo.scale.set(0.85, 0.85, 1);
+starHalo.position.y = 8.05;
+starHalo.scale.set(0.58, 0.58, 1);
 starHalo.renderOrder = 3;
 tree.add(starHalo);
 
@@ -608,6 +593,9 @@ const orbitHome = new THREE.Vector3();
 const orbitDest = new THREE.Vector3();
 const orbitScale = new THREE.Vector3();
 let held = null;
+let prevHeld = null;
+let hoverPhoto = null;
+let prevHover = null;
 function orbitItem(obj, kind) {
   obj.userData.kind = kind;
   obj.userData.ang = Math.random() * Math.PI * 2;
@@ -663,47 +651,109 @@ function paintCard(hue, label) {
   return tex;
 }
 
+function sizePhotoFrame(g, tex) {
+  const img = tex.image;
+  if (!img?.width) return;
+  const ar = img.width / img.height;
+  const face = g.userData.face;
+  const paper = g.userData.paper;
+  const cap = 0.7;
+  let faceW;
+  let faceH;
+  if (ar >= 1) {
+    faceW = cap;
+    faceH = cap / ar;
+  } else {
+    faceH = cap;
+    faceW = cap * ar;
+  }
+  face.geometry.dispose();
+  face.geometry = new THREE.PlaneGeometry(faceW, faceH);
+  const side = 0.055;
+  const bottom = 0.11;
+  const pw = faceW + side * 2;
+  const ph = faceH + side + bottom;
+  paper.geometry.dispose();
+  paper.geometry = new THREE.PlaneGeometry(pw, ph);
+  face.position.set(0, (bottom - side) * 0.35, 0.024);
+  // 竖图字多，捏合时放得更大
+  if (ar < 0.72) g.userData.heldMul = 3.38;
+  else if (ar > 1.25) g.userData.heldMul = 2.95;
+  else g.userData.heldMul = 3.22;
+  g.userData.hoverMul = 0.72;
+}
+
 function makePhoto(tex) {
   const g = new THREE.Group();
   const paper = new THREE.Mesh(
     new THREE.PlaneGeometry(0.78, 0.98),
     new THREE.MeshStandardMaterial({
-      color: 0xf7f1e6,
+      color: 0xe7f1fb,
       roughness: 0.7,
       metalness: 0.02,
       side: THREE.DoubleSide,
     })
   );
   const face = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.66, 0.66),
+    new THREE.PlaneGeometry(0.64, 0.64),
     new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
   );
-  face.position.set(0, 0.08, 0.02);
+  g.userData.face = face;
+  g.userData.paper = paper;
   g.add(paper, face);
   g.scale.setScalar(1.05);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  const aniso = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = aniso > 4 ? 8 : aniso;
+  sizePhotoFrame(g, tex);
   return g;
 }
 
+function layoutPhotoRing() {
+  const lined = photosOnly();
+  for (let i = 0; i < lined.length; i++) {
+    lined[i].userData.ang = (i / lined.length) * Math.PI * 2;
+    lined[i].userData.spin = 0.32;
+  }
+}
+
 const giftColors = [
-  [0xc81d32, 0xf2d48a],
-  [0x1d6b45, 0xf0c14d],
-  [0xc6a15a, 0x8e1a28],
-  [0xf3ead7, 0xb42334],
-  [0x16386a, 0xffe1a8],
-  [0xff6b93, 0xfff6e4],
+  [0x123a62, 0xe8d09a],
+  [0x1a4e7c, 0xd5e6f6],
+  [0x0e2744, 0xf4e2b0],
+  [0xc5d8ee, 0x2c6298],
+  [0x163e6c, 0xe8d09a],
+  [0x6a96c6, 0xf4f9ff],
 ];
 for (let i = 0; i < giftColors.length; i++) {
   orbitItem(makeGift(giftColors[i][0], giftColors[i][1]), "gift");
 }
-const localPhotos = ["/photos/01.jpg", "/photos/02.jpg", "/photos/03.jpg", "/photos/04.jpg"];
+// 1-18 按文件名顺序，和 public/photos 里一致
+const photoFiles = [
+  "1.jpg", "2.jpg", "3.jpg", "4.png", "5.png", "6.png", "7.png", "8.jpg", "9.jpg", "10.png",
+  "11.png", "12.png", "13.png", "14.png", "15.png", "16.png", "17.png", "18.jpg",
+];
+const localPhotos = photoFiles.map((name) => `/photos/${name}`);
 const photoLoader = new THREE.TextureLoader();
 for (let i = 0; i < localPhotos.length; i++) {
   const url = localPhotos[i];
-  const tex = photoLoader.load(url, () => {
-    console.log("本地照片好了", url);
-  });
-  tex.colorSpace = THREE.SRGBColorSpace;
-  orbitItem(makePhoto(tex), "photo");
+  photoLoader.load(
+    url,
+    (tex) => {
+      const obj = makePhoto(tex);
+      orbitItem(obj, "photo");
+      if (!reduceMotion) obj.scale.setScalar(0.001);
+      layoutPhotoRing();
+      console.log("照片好了", url);
+    },
+    undefined,
+    (err) => console.error("照片挂了", url, err)
+  );
+}
+if (!reduceMotion) {
+  for (let i = 0; i < orbits.length; i++) orbits[i].scale.setScalar(0.001);
 }
 
 function photosOnly() {
@@ -713,49 +763,6 @@ function photosOnly() {
   }
   return list;
 }
-
-const aimNdc = new THREE.Vector3();
-function fingerToPhoto(nx, ny, photo) {
-  aimNdc.copy(photo.position).project(camera);
-  if (aimNdc.z > 1) return 99;
-  const sx = (aimNdc.x + 1) * 0.5;
-  const sy = (1 - aimNdc.y) * 0.5;
-  return Math.hypot(sx - nx, sy - ny);
-}
-
-function photoUnderFinger(nx, ny, limit) {
-  const photos = photosOnly();
-  let best = null;
-  let bestD = limit;
-  for (let i = 0; i < photos.length; i++) {
-    const d = fingerToPhoto(nx, ny, photos[i]);
-    if (d < bestD) {
-      bestD = d;
-      best = photos[i];
-    }
-  }
-  return best;
-}
-
-const aimEl = document.querySelector("#aim");
-const photoBtn = document.querySelector("#photos");
-const photoFile = document.querySelector("#photo-file");
-photoBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  photoFile.click();
-});
-photoFile.addEventListener("change", () => {
-  const files = photoFile.files;
-  if (!files || !files.length) return;
-  for (let i = 0; i < files.length; i++) {
-    const url = URL.createObjectURL(files[i]);
-    const tex = new THREE.TextureLoader().load(url);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    orbitItem(makePhoto(tex), "photo");
-  }
-  console.log("放进树里", files.length, "张");
-  photoFile.value = "";
-});
 
 const snowTex = circleTex();
 const snowMat = new THREE.PointsMaterial({
@@ -769,49 +776,17 @@ const snowMat = new THREE.PointsMaterial({
   sizeAttenuation: true,
 });
 
-const snowN = 1600;
-const snowPos = new Float32Array(snowN * 3);
-const snowSpeed = new Float32Array(snowN);
-for (let i = 0; i < snowN; i++) {
-  snowPos[i * 3] = (Math.random() - 0.5) * 16;
-  snowPos[i * 3 + 1] = Math.random() * 9;
-  snowPos[i * 3 + 2] = (Math.random() - 0.5) * 16;
-  snowSpeed[i] = 0.65 + Math.random() * 1.15;
-}
-const snowGeo = new THREE.BufferGeometry();
-snowGeo.setAttribute("position", new THREE.BufferAttribute(snowPos, 3));
-scene.add(new THREE.Points(snowGeo, snowMat));
-
-// 远处的星，不跟着雪落
-const skyN = 1600;
-const skyPos = new Float32Array(skyN * 3);
-for (let i = 0; i < skyN; i++) {
-  const ang = Math.random() * Math.PI * 2;
-  const elev = Math.random() * Math.PI * 0.55 + 0.15;
-  const rad = 16 + Math.random() * 18;
-  skyPos[i * 3] = Math.cos(ang) * Math.sin(elev) * rad;
-  skyPos[i * 3 + 1] = Math.cos(elev) * rad * 0.45 + 2;
-  skyPos[i * 3 + 2] = Math.sin(ang) * Math.sin(elev) * rad;
-}
-const skyGeo = new THREE.BufferGeometry();
-skyGeo.setAttribute("position", new THREE.BufferAttribute(skyPos, 3));
-const skyMat = snowMat.clone();
-skyMat.size = 0.07;
-skyMat.opacity = 0.75;
-skyMat.blending = THREE.AdditiveBlending;
-scene.add(new THREE.Points(skyGeo, skyMat));
-
 // 树脚几圈光环，整圈一起转
 const ringN = 5400;
 const ringPos = new Float32Array(ringN * 3);
 const ringCol = new Float32Array(ringN * 3);
-const ringRadii = [2.25, 3.45, 4.85, 6.35];
+const ringRadii = [2.4, 3.95, 5.65, 7.45];
 for (let i = 0; i < ringN; i++) {
   const ring = i % ringRadii.length;
   const ang = Math.random() * Math.PI * 2;
-  const rad = ringRadii[ring] + (Math.random() - 0.5) * (0.16 + ring * 0.06);
+  const rad = ringRadii[ring] + (Math.random() - 0.5) * (0.22 + ring * 0.05);
   ringPos[i * 3] = Math.cos(ang) * rad;
-  ringPos[i * 3 + 1] = 0.03 + Math.random() * 0.28;
+  ringPos[i * 3 + 1] = TREE_REST_Y + 0.04 + Math.random() * 0.22;
   ringPos[i * 3 + 2] = Math.sin(ang) * rad;
   const c = new THREE.Color(Math.random() < 0.14 ? 0xfff3d8 : 0xe8f1fb);
   const g = 0.45 + Math.random() * 1.15;
@@ -839,14 +814,17 @@ const groundN = 900;
 const groundPos = new Float32Array(groundN * 3);
 for (let i = 0; i < groundN; i++) {
   const ang = Math.random() * Math.PI * 2;
-  const rad = Math.pow(Math.random(), 0.55) * 4.4;
+  const rad = Math.pow(Math.random(), 0.55) * 4.6;
   groundPos[i * 3] = Math.cos(ang) * rad;
-  groundPos[i * 3 + 1] = 0.02 + Math.random() * 0.05;
+  groundPos[i * 3 + 1] = TREE_REST_Y + 0.02 + Math.random() * 0.05;
   groundPos[i * 3 + 2] = Math.sin(ang) * rad;
 }
 const groundGeo = new THREE.BufferGeometry();
 groundGeo.setAttribute("position", new THREE.BufferAttribute(groundPos, 3));
 const groundSnow = new THREE.Points(groundGeo, snowMat.clone());
+groundSnow.material.vertexColors = false;
+groundSnow.material.color.set(0xf7fbff);
+groundSnow.material.sizeAttenuation = true;
 groundSnow.material.size = 0.055;
 groundSnow.material.opacity = 0.7;
 scene.add(groundSnow);
@@ -867,14 +845,14 @@ function groundDisc() {
 }
 
 const floor = new THREE.Mesh(
-  new THREE.CircleGeometry(7.5, 64),
+  new THREE.CircleGeometry(8.6, 64),
   new THREE.MeshBasicMaterial({ map: groundDisc(), transparent: true, depthWrite: false })
 );
 floor.rotation.x = -Math.PI / 2;
-floor.position.y = 0.01;
+floor.position.y = TREE_REST_Y + 0.02;
 scene.add(floor);
 
-const fwN = 640;
+const fwN = 4800;
 const fwPos = new Float32Array(fwN * 3);
 const fwColor = new Float32Array(fwN * 3);
 const fwVel = [];
@@ -889,7 +867,7 @@ fwGeo.setAttribute("color", new THREE.BufferAttribute(fwColor, 3));
 const fwPoints = new THREE.Points(
   fwGeo,
   new THREE.PointsMaterial({
-    size: 0.09,
+    size: 0.26,
     map: snowTex,
     vertexColors: true,
     transparent: true,
@@ -898,13 +876,14 @@ const fwPoints = new THREE.Points(
     sizeAttenuation: true,
   })
 );
+fwPoints.frustumCulled = false;
 scene.add(fwPoints);
 
 let fwCursor = 0;
-const fwPalette = [0xffe7a8, 0xff3148, 0xfff8ea, 0x8dffb4, 0x9fd4ff, 0xffb03a];
+const fwPalette = [0xfff6e8, 0xf5e6c4, 0xffefc8, 0xe8d4a0, 0xfff9f0, 0xd9bc7a];
 
 function spawnBurst(origin) {
-  const batch = 220;
+  const batch = 460;
   for (let i = 0; i < batch; i++) {
     const idx = (fwCursor + i) % fwN;
     const o = idx * 3;
@@ -913,29 +892,50 @@ function spawnBurst(origin) {
     fwPos[o + 2] = origin.z;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
-    const speed = 1.4 + Math.random() * 4.4;
+    const tail = Math.random() < 0.28;
+    const speed = tail ? 0.25 + Math.random() * 0.45 : 1.35 + Math.random() * 1.05;
     fwVel[idx].set(
       Math.sin(phi) * Math.cos(theta) * speed,
-      Math.abs(Math.cos(phi)) * speed * 0.85 + 0.4,
+      Math.cos(phi) * speed,
       Math.sin(phi) * Math.sin(theta) * speed
     );
-    fwLife[idx] = 0.7 + Math.random() * 0.7;
+    fwLife[idx] = tail ? 2.1 + Math.random() * 1.0 : 1.45 + Math.random() * 0.75;
     const col = new THREE.Color(fwPalette[idx % fwPalette.length]);
-    fwColor[o] = col.r * 2.2;
-    fwColor[o + 1] = col.g * 2.2;
-    fwColor[o + 2] = col.b * 2.2;
+    const lit = tail ? 1.35 : 1.65;
+    fwColor[o] = col.r * lit;
+    fwColor[o + 1] = col.g * lit;
+    fwColor[o + 2] = col.b * lit;
   }
   fwCursor = (fwCursor + batch) % fwN;
   fwGeo.attributes.position.needsUpdate = true;
   fwGeo.attributes.color.needsUpdate = true;
-  uniforms.uBurst.value = 1;
+  if (openAmt > 0.7) uniforms.uBurst.value = 1;
   if (soundOn) ting();
+}
+
+const fwNdc = new THREE.Vector3();
+const fwOrigin = new THREE.Vector3();
+
+function burstOnScreen(ndcX, ndcY) {
+  // 跟镜头走，左右固定在画面内侧，不贴边、不乱跳
+  fwNdc.set(ndcX, ndcY, 0.5);
+  fwNdc.unproject(camera);
+  fwOrigin.copy(fwNdc).sub(camera.position);
+  const dist = camera.position.distanceTo(controls.target);
+  fwOrigin.normalize().multiplyScalar(dist).add(camera.position);
+  spawnBurst(fwOrigin);
+}
+
+function bothSides() {
+  // 左右上方固定，再往两侧靠，不贴死屏幕边
+  burstOnScreen(-0.78, 0.62);
+  burstOnScreen(0.78, 0.62);
 }
 
 const raycaster = new THREE.Raycaster();
 const pointerNdc = new THREE.Vector2();
 const pointerWorld = new THREE.Vector3();
-const treeHeart = new THREE.Vector3(0, 2.6, 0);
+const treeHeart = new THREE.Vector3(0, 3.8, 0);
 let pointerOn = false;
 let pointerTarget = 0;
 let downX = 0;
@@ -961,10 +961,7 @@ window.addEventListener("pointerup", (e) => {
   if (pressing && moved < 7) {
     pointerNdc.x = (e.clientX / window.innerWidth) * 2 - 1;
     pointerNdc.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(pointerNdc, camera);
-    raycaster.ray.closestPointToPoint(treeHeart, pointerWorld);
-    pointerWorld.lerp(treeHeart, 0.28);
-    spawnBurst(pointerWorld);
+    bothSides();
   }
   pressing = false;
   if (!reduceMotion) controls.autoRotate = true;
@@ -1029,6 +1026,92 @@ soundBtn.addEventListener("click", (e) => {
   toggleSound();
 });
 
+const letterOpen = document.querySelector("#letter-open");
+const letterBox = document.querySelector("#letter");
+const letterClose = document.querySelector("#letter-close");
+const letterSky = document.querySelector("#letter-sky");
+let skyRun = 0;
+let skyDrops = [];
+
+function sizeSky() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+  letterSky.width = Math.floor(window.innerWidth * dpr);
+  letterSky.height = Math.floor(window.innerHeight * dpr);
+  const ctx = letterSky.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function seedDrops() {
+  skyDrops = [];
+  for (let i = 0; i < 680; i++) {
+    skyDrops.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      v: 70 + Math.random() * 200,
+      len: 8 + Math.random() * 18,
+      gold: Math.random() < 0.22,
+    });
+  }
+}
+
+function skyTick() {
+  if (!skyRun) return;
+  const ctx = letterSky.getContext("2d");
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const dt = 0.016;
+  ctx.fillStyle = "#05070c";
+  ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < skyDrops.length; i++) {
+    const p = skyDrops[i];
+    p.y += p.v * dt;
+    if (p.y > h + 20) {
+      p.y = -20;
+      p.x = Math.random() * w;
+    }
+    ctx.strokeStyle = p.gold ? "rgba(240,215,164,0.55)" : "rgba(150,196,255,0.42)";
+    ctx.lineWidth = p.gold ? 1.2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x, p.y + p.len);
+    ctx.stroke();
+  }
+  requestAnimationFrame(skyTick);
+}
+
+function openLetter() {
+  letterBox.classList.add("on");
+  letterBox.setAttribute("aria-hidden", "false");
+  sizeSky();
+  if (!skyDrops.length) seedDrops();
+  if (!skyRun) {
+    skyRun = 1;
+    requestAnimationFrame(skyTick);
+  }
+  console.log("打开信");
+}
+
+function shutLetter() {
+  letterBox.classList.remove("on");
+  letterBox.setAttribute("aria-hidden", "true");
+  skyRun = 0;
+}
+
+letterOpen.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openLetter();
+});
+letterClose.addEventListener("click", (e) => {
+  e.stopPropagation();
+  shutLetter();
+});
+letterBox.addEventListener("click", (e) => {
+  if (e.target === letterBox || e.target === letterSky) shutLetter();
+});
+window.addEventListener("resize", () => {
+  if (letterBox.classList.contains("on")) sizeSky();
+});
+
 const composer = new EffectComposer(renderer, {
   multisampling: 4,
   frameBufferType: THREE.HalfFloatType,
@@ -1036,7 +1119,7 @@ const composer = new EffectComposer(renderer, {
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new BloomEffect({
   intensity: 1.05,
-  luminanceThreshold: 0.74,
+  luminanceThreshold: 0.82,
   luminanceSmoothing: 0.16,
   mipmapBlur: true,
   radius: 0.4,
@@ -1084,8 +1167,10 @@ let openTarget = 0;
 let fistHold = 0;
 let palmHold = 0;
 let pinchHold = false;
+let pinchWarm = 0;
+let pinchReady = true;
+let photoAt = 0;
 let handMiss = 0;
-let aimPhoto = null;
 let gesture = null;
 let seenTime = -1;
 let handTs = 0;
@@ -1121,10 +1206,6 @@ function tipGap(img, world, a, b) {
   };
 }
 
-function tipsTogether(gap, imgOn, worldOn) {
-  return gap.id < imgOn || gap.wd < worldOn;
-}
-
 function readHand() {
   if (!gesture || cam.readyState < 2 || !cam.videoWidth) return;
   if (cam.currentTime === seenTime) return;
@@ -1144,10 +1225,10 @@ function readHand() {
   if (!img || img.length < 21) {
     handMiss++;
     if (handMiss < 8 && pinchHold) return;
-    aimEl.hidden = true;
     held = null;
     pinchHold = false;
-    aimPhoto = null;
+    pinchWarm = 0;
+    pinchReady = true;
     fistHold = 0;
     palmHold = 0;
     return;
@@ -1189,60 +1270,55 @@ function readHand() {
     openTarget = 1;
     held = null;
     pinchHold = false;
-    aimPhoto = null;
-    console.log("张掌，满天星");
+    console.log("张开，爱心");
   }
   if (fistHold === 8) {
     openTarget = 0;
     held = null;
     pinchHold = false;
-    aimPhoto = null;
     console.log("握拳，树");
   }
 
-  // 食指对准哪张，拇指和食指（或食指和小拇指）捏住才放大。捏的时候食指是弯的，不能拿“伸直”当条件
   const ti = tipGap(img, world, 4, 8);
-  const ip = tipGap(img, world, 8, 20);
-  // 其他手指可以弯着，只要不是整只握拳，捏合就能把对准的照片放大
-  const grabbing =
-    !fistOk &&
-    (tipsTogether(ti, pinchHold ? 0.17 : 0.12, pinchHold ? 0.085 : 0.06) ||
-      tipsTogether(ip, pinchHold ? 0.18 : 0.13, pinchHold ? 0.09 : 0.065));
+  const midGap = tipGap(img, world, 8, 12);
+  // 食指拇指要明显比旁边更近，连续几帧才放大，避免还没捏上就跳
+  const pinched = !fistOk && ti.id < 0.055 && ti.id < midGap.id * 0.62;
+  const opened = ti.id > 0.12;
 
-  const nx = 1 - img[8].x;
-  const ny = img[8].y;
-  aimEl.hidden = false;
-  aimEl.style.left = nx * 100 + "%";
-  aimEl.style.top = ny * 100 + "%";
+  if (opened) pinchReady = true;
 
-  const near = photoUnderFinger(nx, ny, 0.2);
-  if (near) aimPhoto = near;
-  else if (aimPhoto && fingerToPhoto(nx, ny, aimPhoto) > 0.34) aimPhoto = null;
+  if (pinchHold) {
+    if (ti.id < 0.09) return;
+    pinchHold = false;
+    pinchWarm = 0;
+    pinchReady = false;
+    held = null;
+    console.log("松开，照片回去");
+    return;
+  }
 
-  if (grabbing) {
-    if (!pinchHold) {
-      const hit = photoUnderFinger(nx, ny, 0.28) || aimPhoto;
-      if (hit) {
-        held = hit;
+  if (pinched && pinchReady) {
+    pinchWarm++;
+    if (pinchWarm >= 5) {
+      const photos = photosOnly();
+      if (photos.length) {
+        held = photos[photoAt % photos.length];
+        photoAt++;
         pinchHold = true;
-        console.log("捏合放大");
+        pinchReady = false;
+        console.log("捏合，第", photoAt, "张");
       }
     }
     return;
   }
-  if (pinchHold) {
-    pinchHold = false;
-    held = null;
-    console.log("松开，照片回去");
-  }
+  pinchWarm = 0;
 }
 
 async function makeGesture(vision, delegate) {
   const { GestureRecognizer } = await import("@mediapipe/tasks-vision");
   return GestureRecognizer.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+      modelAssetPath: "/mediapipe/gesture_recognizer.task",
       delegate,
     },
     runningMode: "VIDEO",
@@ -1264,7 +1340,7 @@ async function startHand() {
     camAsk.hidden = true;
     const { FilesetResolver } = await import("@mediapipe/tasks-vision");
     const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm"
+      "/mediapipe/wasm"
     );
     try {
       gesture = await makeGesture(vision, "GPU");
@@ -1289,6 +1365,7 @@ let intro = reduceMotion ? 1 : 0;
 let assemble = reduceMotion ? 1 : 0;
 let clock = performance.now();
 let revealed = false;
+let nextFw = 0;
 
 function frame(now) {
   frameBody(now);
@@ -1302,11 +1379,15 @@ function frameBody(now) {
   uniforms.uTime.value = time;
 
   if (intro < 1) {
-    intro = Math.min(1, intro + dt / 2.3);
+    intro = Math.min(1, intro + dt / 4.8);
     const k = 1 - Math.pow(1 - intro, 3);
+    tree.position.y = (1 - k) * -11.4 * TREE_SIZE + k * TREE_REST_Y;
+    tree.rotation.y = (1 - k) * Math.PI * 2.7;
     camera.position.lerpVectors(camFrom, camTo, k);
     camera.lookAt(controls.target);
     if (intro >= 1) {
+      tree.position.y = TREE_REST_Y;
+      tree.rotation.y = 0;
       controls.enabled = true;
       controls.update();
     }
@@ -1314,57 +1395,104 @@ function frameBody(now) {
     controls.update();
   }
 
-  const asmTarget = 1;
-  assemble += (asmTarget - assemble) * (1 - Math.exp(-dt * 1.55));
+  assemble += (1 - assemble) * (1 - Math.exp(-dt * 0.85));
   uniforms.uAssemble.value = assemble;
   uniforms.uBurst.value *= Math.exp(-dt * 2.4);
   readHand();
-  openAmt += (openTarget - openAmt) * (1 - Math.exp(-dt * 2.6));
+  if (held !== prevHeld) {
+    if (prevHeld?.userData.kind === "photo") prevHeld.userData.snapBack = 1.2;
+    prevHeld = held;
+  }
+  openAmt += (openTarget - openAmt) * (1 - Math.exp(-dt * 2.2));
   uniforms.uOpen.value = openAmt;
-  titleEl.style.opacity = openAmt > 0.42 ? "0" : String(1 - openAmt / 0.42);
-  scene.fog.density = 0.011 * (1 - openAmt * 0.45);
-  bloom.intensity = 1.05 - openAmt * 0.22;
+  let pulse = 1;
+  if (openAmt > 0.58) {
+    const beatT = time * 0.95;
+    const dub = Math.pow(Math.max(0, Math.sin(beatT * Math.PI * 2)), 2.8);
+    const dub2 = Math.pow(Math.max(0, Math.sin(beatT * Math.PI * 2 - 0.38)), 2.8);
+    pulse = 1 + dub * 0.09 + dub2 * 0.06;
+  }
+  uniforms.uHeartPulse.value = pulse;
+  scene.fog.density = 0.011 * (1 - openAmt * 0.35);
+  bloom.intensity = 0.62 - openAmt * 0.08;
 
-  if (intro >= 1 && !reduceMotion && !pressing && !held) {
+  hoverPhoto = null;
+  if (pointerOn && !held && !pinchHold) {
+    raycaster.setFromCamera(pointerNdc, camera);
+    const hits = raycaster.intersectObjects(orbits, true);
+    for (let h = 0; h < hits.length; h++) {
+      let root = hits[h].object;
+      while (root && root.userData.kind !== "photo") root = root.parent;
+      if (root?.userData.kind === "photo") {
+        hoverPhoto = root;
+        break;
+      }
+    }
+  }
+
+  if (hoverPhoto !== prevHover) {
+    if (prevHover && prevHover !== held) prevHover.userData.snapBack = 1.2;
+    prevHover = hoverPhoto;
+  }
+  titleEl.style.opacity = held || hoverPhoto ? "0.55" : "1";
+
+  if (intro >= 1 && !reduceMotion && !pressing && !held && !hoverPhoto) {
     controls.autoRotate = true;
   }
 
   const ball = openAmt;
+  const born = reduceMotion ? 1 : Math.min(1, Math.max(0, (assemble - 0.58) / 0.28));
   for (let i = 0; i < orbits.length; i++) {
     const obj = orbits[i];
-    obj.userData.ang += dt * obj.userData.spin * (0.75 + ball * 0.7);
+    const photo = obj.userData.kind === "photo";
+    obj.userData.ang += dt * (photo ? 0.32 : obj.userData.spin * 0.75);
     const ang = obj.userData.ang;
-    let rad = obj.userData.rad;
-    let y = obj.userData.y0;
-    if (ball > 0.02) {
-      const sph = 4.3 + Math.sin(obj.userData.phase) * 0.9;
-      rad = rad + (sph - rad) * ball;
-      const yBall = 4.7 + Math.sin(ang * 1.3 + obj.userData.phase) * 1.7;
-      y = y + (yBall - y) * ball;
+    if (photo) {
+      // 握拳时绕着树，张开时改到爱心外面
+      const tx = Math.cos(ang) * 6.5;
+      const tz = Math.sin(ang) * 6.5;
+      const ty = 1.55 + (Math.sin(ang) * 0.5 + 0.5) * 4.6;
+      const hx = Math.cos(ang) * 8.1;
+      const hy = heartY + Math.sin(ang) * 5.05;
+      orbitHome.set(tx + (hx - tx) * ball, ty + (hy - ty) * ball, tz + (1.4 - tz) * ball);
+    } else {
+      orbitHome.set(Math.cos(ang) * obj.userData.rad, obj.userData.y0, Math.sin(ang) * obj.userData.rad);
     }
-    orbitHome.set(Math.cos(ang) * rad, y, Math.sin(ang) * rad);
-    if (obj === held) {
-      orbitDest.copy(orbitHome).lerp(camera.position, 0.36);
+    obj.visible = photo ? true : ball < 0.4;
+    const focus = obj === held || (photo && obj === hoverPhoto);
+    if (focus) {
+      if (obj === hoverPhoto && obj !== held) {
+        raycaster.setFromCamera(pointerNdc, camera);
+        orbitDest.copy(raycaster.ray.direction).multiplyScalar(7.6).add(camera.position);
+      } else {
+        camera.getWorldDirection(orbitDest);
+        orbitDest.multiplyScalar(7.6).add(camera.position);
+      }
       obj.position.lerp(orbitDest, 1 - Math.exp(-dt * 7));
       obj.lookAt(camera.position);
-      const big = obj.userData.home * 3.15;
+      const big = obj.userData.home * (obj.userData.heldMul || 3.22);
       orbitScale.set(big, big, big);
       obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 8));
     } else {
-      obj.position.lerp(orbitHome, 1 - Math.exp(-dt * 4.5));
-      if (obj.userData.kind === "photo") obj.lookAt(camera.position);
+      const backFast = photo && (obj.userData.snapBack || 0) > 0;
+      if (backFast) obj.userData.snapBack -= dt * 2.8;
+      const posK = backFast ? 14 : 4.5;
+      obj.position.lerp(orbitHome, 1 - Math.exp(-dt * posK));
+      if (photo) obj.lookAt(camera.position);
       else {
-        obj.rotation.y = ang + time * 0.55;
-        obj.rotation.z = Math.sin(time * 0.7 + obj.userData.phase) * 0.18;
+        obj.rotation.y = ang + time * 0.4;
+        obj.rotation.z = Math.sin(time * 0.7 + obj.userData.phase) * 0.12;
       }
       let s = obj.userData.home;
-      if (obj.userData.kind === "photo") s *= 1 + ball * 0.9;
+      if (photo) s *= (0.99 + ball * 0.22) * Math.max(born, ball * 0.85 + 0.12);
+      else s *= (1 - ball) * born;
+      if ((held || hoverPhoto) && photo && obj !== hoverPhoto) s *= 0.72;
       orbitScale.set(s, s, s);
-      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * 5));
+      const scaleK = backFast ? 16 : 5;
+      obj.scale.lerp(orbitScale, 1 - Math.exp(-dt * scaleK));
     }
   }
 
-  const born = reduceMotion ? 1 : Math.min(1, Math.max(0, (assemble - 0.72) / 0.22));
   const treeFade = (1 - openAmt) * born;
   for (let i = 0; i < propMats.length; i++) {
     const m = propMats[i];
@@ -1381,7 +1509,7 @@ function frameBody(now) {
   }
 
   treeLamp.intensity = (7 + Math.sin(time * 2.4) * 1.4) * treeFade;
-  starLamp.intensity = 14 * treeFade;
+  starLamp.intensity = 9 * treeFade;
   starPivot.lookAt(camera.position);
   star.rotation.z = time * 0.18;
   starGlow.material.opacity = (0.88 + Math.sin(time * 2.2) * 0.08) * treeFade;
@@ -1389,33 +1517,25 @@ function frameBody(now) {
   ringPts.rotation.y = time * 0.55;
   ringMat.opacity = 0.92 * treeFade;
 
-  const posAttr = snowGeo.attributes.position;
-  for (let i = 0; i < snowN; i++) {
-    let y = snowPos[i * 3 + 1] - snowSpeed[i] * dt;
-    let x = snowPos[i * 3] + Math.sin(time * 1.3 + i) * 0.22 * dt;
-    if (y < -0.2) {
-      y = 8.2;
-      x = (Math.random() - 0.5) * 16;
-      snowPos[i * 3 + 2] = (Math.random() - 0.5) * 16;
-    }
-    snowPos[i * 3] = x;
-    snowPos[i * 3 + 1] = y;
+  // 一进来就放，左右接着放，间隔短一点
+  if (!reduceMotion && time >= nextFw) {
+    bothSides();
+    nextFw = time + 1.05 + Math.random() * 0.4;
   }
-  posAttr.needsUpdate = true;
 
   let fwDirty = false;
   for (let i = 0; i < fwN; i++) {
     if (fwLife[i] <= 0) continue;
     fwLife[i] -= dt;
-    fwVel[i].y -= 2.8 * dt;
+    fwVel[i].y -= 0.62 * dt;
     const o = i * 3;
     fwPos[o] += fwVel[i].x * dt;
     fwPos[o + 1] += fwVel[i].y * dt;
     fwPos[o + 2] += fwVel[i].z * dt;
     const fade = Math.max(0, fwLife[i]);
-    fwColor[o] *= 0.985;
-    fwColor[o + 1] *= 0.985;
-    fwColor[o + 2] *= 0.985;
+    fwColor[o] *= 0.994;
+    fwColor[o + 1] *= 0.994;
+    fwColor[o + 2] *= 0.994;
     if (fwLife[i] <= 0) {
       fwPos[o + 1] = -30;
       fwColor[o] = 0;
